@@ -243,21 +243,25 @@ gaps <- left_join(gaps, edge, by = c("state", "ncessch")) %>%
   select(state, district_id, school_id, sch_name, ncessch, 
          city, cnty, nmcnty, lat, lon, content, grade, v_hisp, v_econ)
 
-
 # Add N's back in
 ns <- d %>%
   select(-performance_level, -prop) %>%
-  group_by(state, district_id, school_id, content, student_group) %>%
-  distinct(.keep_all = TRUE) %>%
-  ungroup()
+  group_by(state, district_id, school_id, content, grade) %>%
+  summarize(n = sum(n))
 
 gaps <- left_join(gaps, ns)
 
 length(unique(gaps$school_id[!is.na(gaps$v_hisp)]))
 length(unique(gaps$school_id[!is.na(gaps$v_econ)]))
 
+# write out csv
 gaps %>% 
-  select(-district, -school, -sch_name) %>% 
   select(state:grade, n, v_hisp, v_econ) %>% 
   arrange(state, district_id, school_id, content, grade) %>% 
 write_csv(here("data", "achievement-gaps-geocoded.csv"))
+
+# write out feather file
+gaps %>% 
+  select(state:grade, n, v_hisp, v_econ) %>% 
+  arrange(state, district_id, school_id, content, grade) %>% 
+  feather::write_feather(here("data", "achievement-gaps-geocoded.feather"))
