@@ -45,6 +45,12 @@ label_locs <- vars %>%
 			   cumsum_lag = ifelse(is.na(cumsum_lag), 0, cumsum_lag),
 			   midpoint = (cumsum + cumsum_lag)/2) 
 
+perc_label_locs <- vars %>%
+	group_by(model) %>%
+	arrange(desc(label)) %>%
+	mutate(lag = ifelse(is.na(lag(proportion)), 0, lag(proportion)),
+		     cumsum = cumsum(lag))
+
 ggplot(vars, aes(model, proportion)) +
 	geom_col(aes(fill = label),
 		       alpha = 0.8) +
@@ -53,12 +59,16 @@ ggplot(vars, aes(model, proportion)) +
 						color = "gray20",
 						nudge_x = 0.5,
 						hjust = "left") +
+	geom_text(aes(label = paste0(round(proportion, 2)*100, "%"), y = cumsum),
+		        perc_label_locs,
+		        nudge_y = 0.02,
+		        color = "gray30") +
 	scale_x_discrete("Achievement Gap", expand = c(0, 0)) +
 	expand_limits(x = 2.8) +
+	scale_y_continuous(labels = scales::percent) +
 	guides(fill = "none") +
 	labs(x = "Achievement Gap",
-		   y = "Proportion of Total Variability") +
+		   y = "Percentage of Total Variability") +
 	colorblindr::scale_fill_OkabeIto() +
-	theme_minimal(15) #+
-	theme(plot.margin = margin(5, 5, 5, 5, "cm"))
+	theme_minimal(15) 
 
