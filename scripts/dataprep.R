@@ -256,4 +256,8 @@ gaps <- left_join(gaps, ns)
 length(unique(gaps$school_id[!is.na(gaps$v_hisp)]))
 length(unique(gaps$school_id[!is.na(gaps$v_econ)]))
 
-write_csv(gaps, here("data", "achievement-gaps-geocoded.csv"))
+gaps %>% 
+  select(-district, -school, -sch_name) %>% 
+  select(state:grade, n, v_hisp, v_econ) %>% 
+  arrange(state, district_id, school_id, content, grade) %>% 
+write_csv(here("data", "achievement-gaps-geocoded.csv"))
