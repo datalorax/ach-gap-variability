@@ -35,3 +35,9 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+
+# Data files that are too big
+data/ca_2018/*
+data/geographic/*
+data/or_2018/*
+data/wa_2018/*
