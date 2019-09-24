@@ -41,3 +41,6 @@ data/ca_2018/*
 data/geographic/*
 data/or_2018/*
 data/wa_2018/*
+
+# knn model results (too huge)
+knn-models/*
