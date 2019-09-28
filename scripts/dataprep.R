@@ -11,6 +11,15 @@ or_files <- dir_ls(here("data", "or_2018"))
 ca_files <- dir_ls(here("data", "ca_2018"))
 
 ### Oregon Prep
+
+# check minimum reporting n
+map_df(or_files, import, setclass = "tbl_df", 
+       .id = "file", 
+       na = c("-", "--", "*")) %>%
+  clean_names() %>% 
+  count(number_of_participants) %>% 
+  arrange(number_of_participants)
+
 or <- map_df(or_files, import, setclass = "tbl_df", 
              .id = "file", 
              na = c("-", "--", "*")) %>%
@@ -22,10 +31,13 @@ or <- map_df(or_files, import, setclass = "tbl_df",
          student_group, grade_level, 
          number_level_1, number_level_2, number_level_3, number_level_4)
 
+length(table(or$school_id))
+
 or <- or %>% 
   gather(performance_level, number, starts_with("number")) %>% 
   rename(grade = grade_level) %>%
   filter(!is.na(number),
+         student_group == "Black/African American" |
          student_group == "Hispanic/Latino" |
            student_group == "White" |
            student_group == "Econo. Disadvantaged"|
@@ -34,6 +46,7 @@ or <- or %>%
          performance_level = parse_number(performance_level),
          student_group = 
            case_when(
+            student_group == "Black/African American" ~ "Black",
             student_group == "Hispanic/Latino" ~ "Hispanic",
             student_group == "Econo. Disadvantaged" ~ "Econ Dis",
             student_group == "Total Population (All Students)" ~ "Total Pop",
@@ -49,6 +62,13 @@ or <- or %>%
   select(-number)
 
 ### Washington Prep
+map_df(wa_files, import, setclass = "tbl_df", 
+       .id = "file", 
+       na = c("-", "--", "*")) %>%
+  clean_names() %>% 
+  count(count_of_students_expected_to_test_including_previously_passed) %>% 
+  arrange(count_of_students_expected_to_test_including_previously_passed)
+  
 wa <- map_df(wa_files, import, setclass = "tbl_df", 
              .id = "file", 
              na = c("-", "--", "*")) %>%
@@ -68,9 +88,12 @@ wa <- map_df(wa_files, import, setclass = "tbl_df",
          percent_level1, percent_level2, percent_level3, percent_level4) %>%
   filter(content != "Science")
 
+length(table(wa$school_id))
+
 wa <- wa %>%  
   gather(performance_level, percent, starts_with("percent")) %>%
-  filter(student_group == "Hispanic/ Latino of any race(s)" |
+  filter(student_group == "Black/ African American" |
+           student_group == "Hispanic/ Latino of any race(s)" |
            student_group == "White" |
            student_group == "Low-Income" |
            student_group == "All Students",
@@ -80,6 +103,7 @@ wa <- wa %>%
          percent = parse_number(percent),
          student_group = 
            case_when(
+            student_group == "Black/ African American" ~ "Black",
             student_group == "Hispanic/ Latino of any race(s)" ~ "Hispanic",
             student_group == "Low-Income" ~ "Econ Dis",
             student_group == "All Students" ~ "Total Pop",
@@ -93,6 +117,32 @@ wa <- wa %>%
   filter(!(grepl("Total", school) | grepl("Total", district)))
 
 ### California Prep
+# Check minimum reporting
+tmp <- map_df(ca_files[grep("all", ca_files)], read_csv,
+       .id = "file", 
+       na = c("-", "--", "*"),
+       col_types = cols(.default = "c")) %>%
+  clean_names()
+
+length(table(tmp$school_code))
+
+tmp2 <- tmp %>% 
+  select(county_code:students_tested, students_with_scores,
+         percentage_standard_not_met, percentage_standard_nearly_met, 
+         percentage_standard_met, percentage_standard_exceeded) %>% 
+  gather(category, percentage, starts_with("percentage")) %>% 
+  drop_na(percentage) 
+
+tmp2 %>% 
+  count(students_with_scores) %>% 
+  arrange(as.numeric(students_with_scores)) 
+
+schls1 <- tmp2 %>% 
+  filter(students_with_scores == 1) %>% 
+  pull(school_code) 
+
+length(unique(schls1))
+
 ca <- map_df(ca_files[grep("all", ca_files)], read_csv,
              .id = "file", 
              na = c("-", "--", "*"),
@@ -148,7 +198,7 @@ ca_subgroups <- map_df(ca_files[grep("Subgroups", ca_files)], read_csv,
   clean_names()  %>%
   setNames(c("file", "code_string", "subgroup_id", 
              "student_group", "variable")) %>%
-  select(subgroup_id, student_group, variable)
+  select(subgroup_id, student_group, variable) 
 
 ca <- left_join(ca, ca_subgroups) %>%
   filter(variable == "Ethnicity"| 
@@ -157,12 +207,14 @@ ca <- left_join(ca, ca_subgroups) %>%
   select(district, district_id, school, school_id, content, year,
          student_group, grade, performance_level, n, percent) %>%
   filter(!is.na(percent),
-         student_group == "Hispanic or Latino"|
+         student_group == "Black or African American"|
+           student_group == "Hispanic or Latino"|
            student_group == "White" |
            student_group == "Economically disadvantaged" |
            student_group == "All Students") %>%
   mutate(student_group = 
-           case_when(student_group == "Hispanic or Latino" ~ "Hispanic",
+           case_when(student_group == "Black or African American" ~ "Black",
+                     student_group == "Hispanic or Latino" ~ "Hispanic",
                      student_group == "Economically disadvantaged" ~ "Econ Dis",
                      student_group == "All Students" ~ "Total Pop",
                      TRUE ~ student_group)) %>%
@@ -182,7 +234,9 @@ d <- bind_rows(ca, or, wa, .id = "state") %>%
 
 # Prep for auc
 eth <- d %>%
-  filter(student_group == "Hispanic" | student_group == "White") %>%
+  filter(student_group == "Hispanic" | 
+           student_group == "White" |
+           student_group == "Black") %>%
   arrange(state, year, district_id, school_id, content, grade, student_group,
           performance_level) %>%
   group_by(state, year, district_id, school_id, content, grade, student_group) %>%
@@ -227,10 +281,16 @@ v <- function(x, y) {
   sqrt(2)*qnorm(auc)
 }
 
-hisp_gaps <- eth %>%
+hisp_white_gaps <- eth %>%
   group_by(state, year, district_id, school_id, content, grade) %>%
   summarize(v_hisp = v(Hispanic, White)) %>%
   drop_na(v_hisp, district_id) %>%
+  ungroup()
+
+black_white_gaps <- eth %>%
+  group_by(state, year, district_id, school_id, content, grade) %>%
+  summarize(v_black = v(Black, White)) %>%
+  drop_na(v_black, district_id) %>%
   ungroup()
 
 econ_gaps <- econ_dis %>%
@@ -239,12 +299,19 @@ econ_gaps <- econ_dis %>%
   drop_na(v_econ, district_id) %>%
   ungroup()
 
-length(unique(hisp_gaps$school_id)) / length(unique(d$school_id))
+length(unique(hisp_white_gaps$school_id)) / length(unique(d$school_id))
+length(unique(black_white_gaps$school_id)) / length(unique(d$school_id))
 length(unique(econ_gaps$school_id)) / length(unique(d$school_id))
 
-length(unique(hisp_gaps$school_id));length(unique(econ_gaps$school_id))
-gaps <- full_join(hisp_gaps, econ_gaps) 
+length(unique(hisp_white_gaps$school_id))
+length(unique(black_white_gaps$school_id))
+length(unique(econ_gaps$school_id))
+
+gaps <- full_join(hisp_white_gaps, econ_gaps) %>% 
+  full_join(black_white_gaps)
+
 length(unique(gaps$school_id[!is.na(gaps$v_hisp)]))
+length(unique(gaps$school_id[!is.na(gaps$v_black)]))
 length(unique(gaps$school_id[!is.na(gaps$v_econ)]))
 
 ### Add in geocoded data
@@ -307,7 +374,7 @@ edge <- import(here("data", "geographic",
 gaps <- left_join(gaps, edge) %>%
   select(year, state, district_id, school_id, ncessch, 
          content, grade, lat, lon,city, cnty, nmcnty, cbsatype, cbsa, nmcbsa, 
-         v_hisp, v_econ)
+         v_hisp, v_black, v_econ)
 
 gaps %>%
   count(year, missing = is.na(lat)) %>%
@@ -359,14 +426,49 @@ gaps <- gaps %>%
   fill(lon)
 
 length(unique(gaps$school_id[!is.na(gaps$v_hisp)]))
+length(unique(gaps$school_id[!is.na(gaps$v_black)]))
 length(unique(gaps$school_id[!is.na(gaps$v_econ)]))
+
+length(table(filter(gaps, state == "CA")$school_id))
+length(table(filter(gaps, state == "OR")$school_id))
+length(table(filter(gaps, state == "WA")$school_id))
 
 # write out csv
 gaps %>% 
   arrange(state, year, district_id, school_id, content, grade) %>% 
+  select(year:nmcbsa, n, cohort, starts_with("v_")) %>% 
 write_csv(here("data", "achievement-gaps-geocoded.csv"))
+
+
+# Write out long version w/weighted mean
+gaps %>% 
+  gather(gap_group, v, starts_with("v_")) %>% 
+  mutate(gap_group = case_when(gap_group == "v_hisp" ~ "Hispanic-White",
+                               gap_group == "v_black" ~ "Black-White",
+                               TRUE ~ "Economic Disadvantaged-All")) %>%
+  select(year:content, gap_group, cohort, grade, n, lat:nmcbsa, v) %>% 
+  group_by(state, year, district_id, school_id, ncessch, city, cnty, nmcnty, 
+           lat, lon, content, gap_group) %>% 
+  summarize(v = weighted.mean(v, n, na.rm = TRUE))  %>%
+  ungroup() %>% 
+  write_csv(here("data", "achievement-gaps-geocoded-long.csv"))
+
+
 
 # write out feather file
 gaps %>% 
   arrange(state, year, district_id, school_id, content, grade) %>% 
+  select(year:nmcbsa, n, cohort, starts_with("v_")) %>% 
 feather::write_feather(here("data", "achievement-gaps-geocoded.feather"))
+
+gaps %>% 
+  gather(gap_group, v, starts_with("v_")) %>% 
+  mutate(gap_group = case_when(gap_group == "v_hisp" ~ "Hispanic-White",
+                               gap_group == "v_black" ~ "Black-White",
+                               TRUE ~ "Economic Disadvantaged-All")) %>%
+  select(year:content, gap_group, cohort, grade, n, lat:nmcbsa, v) %>% 
+  group_by(state, year, district_id, school_id, ncessch, city, cnty, nmcnty, 
+           lat, lon, content, gap_group) %>% 
+  summarize(v = weighted.mean(v, n, na.rm = TRUE))  %>%
+  ungroup() %>%
+feather::write_feather(here("data", "achievement-gaps-geocoded-long.feather"))

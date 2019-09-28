@@ -1,7 +1,3 @@
-# Note - the actual fitting of the models (starting on line 131) takes a 
-# considerable amount of time. It's best to run this on an HPC or at otherwise
-# be prepared for roughly 24 hours of run time.
-
 library(tidyverse)
 library(here)
 library(tidymodels)
@@ -10,75 +6,54 @@ library(kknn)
 theme_set(theme_minimal(15))
 set.seed(8675309)
 
-gaps <- read_csv(here("data", "achievement-gaps-geocoded.csv"))
+gaps <- read_csv(here("data", "achievement-gaps-geocoded-long.csv")) %>% 
+  mutate(wave = case_when(year == 1415 ~ 0,
+                          year == 1516 ~ 1,
+                          year == 1617 ~ 2,
+                          year == 1718 ~ 3))
 
-### Compute weighted average
-# lose a couple schools because of missing data
-length(unique(gaps$school_id[!is.na(gaps$v_hisp)]))
-length(unique(gaps$school_id[!is.na(gaps$v_econ)]))
+rec_geo <- recipe(v ~ lon + lat, data = gaps)
+rec_all <- recipe(v ~ lon + lat + wave, data = gaps)
+
+gaps18 <- gaps %>% 
+  group_by(content, gap_group) %>% 
+  nest() %>% 
+  mutate(data = map(data, ~filter(.x, year == "1718", 
+                                  !is.na(lon), 
+                                  !is.na(lat), 
+                                  !is.na(v))))
 
 gaps <- gaps %>% 
-  group_by(state, year, district_id, school_id, lat, lon, content) %>% 
-  summarize(v_hisp = weighted.mean(v_hisp, n, na.rm = TRUE),
-            v_econ = weighted.mean(v_econ, n, na.rm = TRUE)) %>%
-  ungroup() 
+  group_by(content, gap_group) %>% 
+  nest() %>% 
+  mutate(data = map(data, ~filter(.x, year != "1718", 
+                                  !is.na(lon), 
+                                  !is.na(lat), 
+                                  !is.na(v))))
 
-gaps18 <- gaps  %>%
-  filter(year == "1718")
+d <- gaps %>% 
+  mutate(data = map(data, ~filter(.x, !is.na(lon), !is.na(lat), !is.na(v))),
+         initial_split = map(data, ~initial_split(.x, strata = district_id)),
+         train = map(initial_split, training),
+         test = map(initial_split, testing))
 
-gaps <- gaps %>%
-  filter(year != "1718")
+cv <- d %>% 
+  mutate(cv = map(train, ~
+                    vfold_cv(.x, v = 10, repeats = 5, strata = "district_id") %>% 
+                    mutate(rec_geo = map(splits, prepper, recipe = rec_geo),
+                           rec_all = map(splits, prepper, recipe = rec_all))
+  )
+  ) %>% 
+  unnest(cv) %>% 
+  gather(model, recipe, starts_with("rec"))
 
-rec_hisp_all_f <- v_hisp ~ lon + lat + year
-rec_hisp_all <- recipe(rec_hisp_all_f, data = gaps) %>%
-  step_num2factor(year) %>%
-  step_dummy(year) %>%
-  step_filter(!is.na(lon), !is.na(lat), !is.na(v_hisp))
-
-rec_hisp_geo_f <- v_hisp ~ lon + lat
-rec_hisp_geo <- recipe(rec_hisp_geo_f, data = gaps) %>%
-  step_filter(!is.na(lon), !is.na(lat), !is.na(v_hisp))
-
-rec_econ_all_f <- v_econ ~ lon + lat + year
-rec_econ_all <- recipe(rec_econ_all_f, data = gaps) %>%
-  step_num2factor(year) %>%
-  step_dummy(year) %>%
-  step_filter(!is.na(lon), !is.na(lat), !is.na(v_econ))
-
-rec_econ_geo_f <- v_econ ~ lon + lat
-rec_econ_geo <- recipe(rec_econ_geo_f, data = gaps) %>%
-  step_filter(!is.na(lon), !is.na(lat), !is.na(v_econ))
-
-# length(unique(gaps$school_id[!is.na(gaps$v_hisp)]))
-# length(unique(gaps$school_id[!is.na(gaps$v_econ)]))
-
-# split the data, stratified by district
-split <- initial_split(gaps, strata = district_id)
-
-# create training/test data
-train <- training(split)
-test <- testing(split)
-
-# Create k-fold cv splits
-cv_splits <- vfold_cv(train, v = 10, repeats = 5, strata = "district_id")  %>%
-  mutate(rec_hisp_all = map(splits, prepper, recipe = rec_hisp_all),
-         rec_econ_all = map(splits, prepper, recipe = rec_econ_all),
-         rec_hisp_geo = map(splits, prepper, recipe = rec_hisp_geo),
-         rec_econ_geo = map(splits, prepper, recipe = rec_econ_geo))
-
-
-fit_model <- function(rec, spec, form) {
+fit_model <- function(rec, spec) {
   fit(
     object = spec,
-    formula = form,
+    formula = v ~ .,
     data = juice(rec, everything())
     ) 
 }
-
-spec_knn_varying <- nearest_neighbor(neighbors = 2) %>%
-  set_engine("kknn") %>% 
-  set_mode("regression") 
-
 
 # above pulls out the training data, limits to only the variables in the 
 # formula, and removes all missing data
@@ -91,7 +66,7 @@ compute_pred <- function(rec, split, model) {
   bind_cols(assess, pred)
 }
 
-compute_perf <- function(pred_df, gap) {
+compute_perf <- function(pred_df) {
   
   # Create a function that calculates
   # rmse and rsq and returns a data frame
@@ -99,7 +74,7 @@ compute_perf <- function(pred_df, gap) {
 
   numeric_metrics(
     pred_df, 
-    truth = !!enquo(gap), 
+    truth = v, 
     estimate = .pred
   )
 }
@@ -116,24 +91,129 @@ spec_knn_varying <- nearest_neighbor(neighbors = varying()) %>%
 param_grid <- param_grid %>%
   mutate(specs = merge(., spec_knn_varying))
 
-
-# ###### Examples of above functions
-# fit_1 <- fit_model(cv_splits$rec_hisp_geo[[1]], param_grid$specs[[1]], rec_hisp_geo_f)
-# compute_pred(cv_splits$rec_hisp_geo[[1]], cv_splits$splits[[1]], fit_1) 
-# compute_pred(cv_splits$rec_hisp_geo[[1]], cv_splits$splits[[1]], fit_1) %>%
-#   compute_perf(v_hisp)
-
-neighbors <- cv_splits %>%
+neighbors <- cv %>%
   mutate(spec_list = list(param_grid)) %>%
-  select(splits, id, id2, rec_hisp_all, spec_list) %>%
+  select(content, gap_group, splits, id, id2, model, spec_list) %>%
   unnest(spec_list)
 
-cv <- left_join(cv_splits[1:nrow(cv_splits), ], neighbors[1:nrow(neighbors), ]) 
+cv <- left_join(cv, neighbors)
 
 # fit all models
 cv <- cv %>%
-  mutate(mod_hisp_all = map2(rec_hisp_all, specs, fit_model, v_hisp ~ .),
-         mod_econ_all = map2(rec_econ_all, specs, fit_model, v_econ ~ .),
-         mod_hisp_geo = map2(rec_hisp_geo, specs, fit_model, v_hisp ~ .),
-         mod_econ_geo = map2(rec_econ_geo, specs, fit_model, v_econ ~ .))
+  mutate(models = map2(recipe, specs, fit_model))
+
+# Compute predictions
+map3 <- function(x, y, z, fun) {
+  pmap(list(x, y, z), ~fun(..1, ..2, ..3))
+}
+
+cv <- cv %>% 
+  mutate(pred = map3(recipe, splits, models, compute_pred))
+
+# Compute performance
+cv <- cv %>% 
+  mutate(perf = map(pred, compute_perf))
+
 write_rds(cv, here("knn-models", "cv-knn.rds"))
+
+############## Evaluate model
+perf <- cv %>%
+  unnest(perf) %>%
+  mutate(model = ifelse(grepl("all", model),
+                        "Geography + Academic Year", 
+                        "Geography Only"))
+
+# summarize by neighbor
+perf %>%
+  filter(.metric == "rmse") %>%
+  group_by(content, model, gap_group, neighbors) %>%
+  summarize(rmse = mean(.estimate)) %>%
+  ggplot(aes(neighbors, rmse, color = content)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap( ~ gap_group,
+              labeller = labeller(gap_group = label_wrap_gen(10))) + 
+  scale_color_brewer(palette = "Accent") +
+  labs(title = "RMSE on left out folds by neighbor for full model",
+       subtitle = "Fit to achievement gap data from 2014-15 to 2016-17") +
+  theme(legend.position = "bottom")
+
+ggsave(here("knn-models", "rmse-by-neigh-full.pdf"),
+       width = 6.5, height = 8)
+
+# Most frequent best neighbor value
+perf %>%
+  group_by(id, id2, content, model, gap_group) %>%
+  summarize(neighbors = neighbors[which.min(.estimate)],
+            rmse      = .estimate[which.min(.estimate)]) %>%
+  ggplot(aes(neighbors, fill = model)) +
+  geom_bar(position = "dodge") +
+  scale_fill_brewer(palette = "Accent") +
+  facet_grid(content ~ gap_group) +
+  theme(legend.position = "bottom")
+
+best_neigh <- perf %>%
+  filter(.metric == "rmse") %>%
+  group_by(content, model, gap_group, neighbors) %>%
+  summarize(rmse = mean(.estimate)) %>% 
+  group_by(model, content, gap_group) %>%
+  summarize(neighbors = neighbors[which.min(rmse)],
+            rmse      = rmse[which.min(rmse)])
+
+  
+best_perf_est <- perf %>%
+  semi_join(best_neigh) %>%
+  group_by(model, content, gap_group, .metric) %>%
+  summarize(mean = mean(.estimate)) %>%
+  spread(.metric, mean)
+
+best_perf_var <- perf %>%
+  semi_join(best_neigh) %>%
+  group_by(model, content, gap_group, .metric) %>%
+  summarize(sd = sd(.estimate)) %>%
+  spread(.metric, sd) %>%
+  rename(rmse_sd = rmse, rsq_sd = rsq)
+
+best_perf <- left_join(best_perf_est, best_perf_var) %>%
+  select(model:rmse, rmse_sd, rsq, rsq_sd) %>%
+  arrange(gap_group, model)
+
+best_specs <- cv %>% 
+  select(neighbors, content, gap_group, specs, recipe, model) %>%
+  mutate(model = ifelse(grepl("all", model),
+                        "Geography + Academic Year", 
+                        "Geography Only")) %>%
+  semi_join(best_neigh) %>%
+  distinct(neighbors, content, gap_group, model, .keep_all = TRUE) %>%
+  filter(model == "Geography Only")
+
+# Test Results
+full_train_model <- best_specs %>% 
+  select(content, gap_group, recipe, specs) %>% 
+  right_join(d) %>% 
+  mutate(train_d = map2(recipe, train, ~bake(.x, new_data = .y)),
+         fit = map2(specs, train_d, ~fit(.x, v ~ ., .y)),
+         test_baked = map2(recipe, test, ~bake(.x, new_data = .y)),
+         test_pred = map2(fit, test_baked, ~predict(.x, new_data = .y)),
+         test_pred = map2(test_baked, test_pred, bind_cols),
+         perf = map(test_pred, compute_perf))
+
+full_train_model %>%
+  unnest(perf) %>%
+  spread(.metric, .estimate) %>% 
+  select(-.estimator) %>% 
+  write_csv(here("knn-models", "geo-full-test1517.csv"))
+
+# Evaluate model on 2018 data
+test18 <- gaps18 %>% 
+  left_join(select(full_train_model, content, gap_group, recipe, fit)) %>% 
+  mutate(test18_baked = map2(recipe, data, ~bake(.x, new_data = .y)),
+         test18_pred = map2(fit, test18_baked, ~predict(.x, new_data = .y)),
+         test18_pred = map2(test18_baked, test18_pred, bind_cols),
+         perf = map(test18_pred, compute_perf))
+
+test18 %>%
+  unnest(perf) %>%
+  spread(.metric, .estimate) %>% 
+  select(-.estimator) %>% 
+  write_csv(here("knn-models", "geo-full-test18.csv"))

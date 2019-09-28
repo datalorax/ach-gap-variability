@@ -44,3 +44,12 @@ data/wa_2018/*
 
 # knn model results (too huge)
 knn-models/*
+
+# varcomp models (also too big)
+manuscript/var-decomp-models/*
+
+# Latex stuff
+manuscript/*.fff
+manuscript/*.log
+manuscript/*.tex
+manuscript/*.ttt
