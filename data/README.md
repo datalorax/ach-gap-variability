@@ -1,6 +1,6 @@
 # Achievement gap data
 
-The `achievement-gaps-geocoded.csv` file in this folder was used for all analyses in the paper. This includes achievement gap data for all schools reporting the percent proficient data on students coded as Hispanic and White OR Economically Disadvantaged and All Students across California, Oregon, and Washington from the 2014-15 to 2017-18 school years. Below is a brief description of the data fields. 
+The `achievement-gaps-geocoded.csv` file in this folder was used for all analyses in the paper. This includes achievement gap data for all schools reporting the percent proficient data on students coded as Hispanic and White, Black and White, **OR** Economically Disadvantaged and All Students across California, Oregon, and Washington from the 2014-15 to 2017-18 school years. Below is a brief description of the data fields. 
 
 The `scripts/dataprep.R` script provides all the code used to create the file. 
 
@@ -24,7 +24,9 @@ The `scripts/dataprep.R` script provides all the code used to create the file.
 |`cbsa` | Core based statistical area |
 |`nmcbsa`| Name of the CBSA|
 |`n`| The total number of students in the grade level
+|`cohort`| Pseudo cohort variable. Number corresponds to the grade the "cohort" of students were in during the 2017-18 school year |
 |`v_hisp`| Hispanic/White achievement gap estimate, interpreted in standard deviation units |
+| `v_black`| Black/White achievement gap estimate, interpreted in standard deviation units |
 |`v_econ`| Economically Disadvantaged/All Students achievement gap estimate, interpreted in standard deviation units |
 
 Note that missing values are reported as `NA`
