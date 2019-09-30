@@ -122,16 +122,16 @@ perf <- cv %>%
   mutate(model = ifelse(grepl("all", model),
                         "Geography + Academic Year", 
                         "Geography Only"))
-
+write_rds(perf, here("knn-models", "perf.rds"))
 # summarize by neighbor
 perf %>%
   filter(.metric == "rmse") %>%
   group_by(content, model, gap_group, neighbors) %>%
   summarize(rmse = mean(.estimate)) %>%
-  ggplot(aes(neighbors, rmse, color = content)) +
+  ggplot(aes(neighbors, rmse, color = model)) +
   geom_line() +
   geom_point() +
-  facet_wrap( ~ gap_group,
+  facet_grid(content ~ gap_group,
               labeller = labeller(gap_group = label_wrap_gen(10))) + 
   scale_color_brewer(palette = "Accent") +
   labs(title = "RMSE on left out folds by neighbor for full model",
@@ -140,17 +140,6 @@ perf %>%
 
 ggsave(here("knn-models", "rmse-by-neigh-full.pdf"),
        width = 6.5, height = 8)
-
-# Most frequent best neighbor value
-perf %>%
-  group_by(id, id2, content, model, gap_group) %>%
-  summarize(neighbors = neighbors[which.min(.estimate)],
-            rmse      = .estimate[which.min(.estimate)]) %>%
-  ggplot(aes(neighbors, fill = model)) +
-  geom_bar(position = "dodge") +
-  scale_fill_brewer(palette = "Accent") +
-  facet_grid(content ~ gap_group) +
-  theme(legend.position = "bottom")
 
 best_neigh <- perf %>%
   filter(.metric == "rmse") %>%
@@ -184,11 +173,13 @@ best_specs <- cv %>%
                         "Geography + Academic Year", 
                         "Geography Only")) %>%
   semi_join(best_neigh) %>%
-  distinct(neighbors, content, gap_group, model, .keep_all = TRUE) %>%
-  filter(model == "Geography Only")
+  distinct(neighbors, content, gap_group, model, .keep_all = TRUE) 
+
+write_rds(best_specs, here("knn-models", "specs_full.rds"))
 
 # Test Results
 full_train_model <- best_specs %>% 
+  filter(model == "Geography Only") %>% 
   select(content, gap_group, recipe, specs) %>% 
   right_join(d) %>% 
   mutate(train_d = map2(recipe, train, ~bake(.x, new_data = .y)),
