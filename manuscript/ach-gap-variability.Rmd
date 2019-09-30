@@ -15,10 +15,10 @@ affiliation:
 
 
 abstract: |
-  Achievement gaps are well documented by income and race/ethnicity. Comparatively little research, however, has investigated between-school differences in these gaps. Using publicly available data from California, Oregon, and Washington from the 2014-15 to 2017-18 school years, we estimate school-level racial and economic achievement gaps by grade and content area. We find the majority of the variance in these estimates lies between schools (within district). We then investigate the extent to which these estimates depend upon geography, with visual displays (maps) providing clear evidence of spatial clustering. Finally, we build a computational model using the physical location of the school (longitude and latitude) to predict the achievement gap. We find approximately 18-61% of the total variability accounted for by location, depending on the specific model. We further use the residualized estimates to identify schools with unexpected achievement gaps. Implications for future research and educational systems-level reform are discussed.
+  Achievement gaps are well documented by income and race/ethnicity. Prior research indicates considerable between-district variation in these gaps, including geographical/spatial variation. Comparatively little research, however, has investigated between-school differences. Using publicly available data from California, Oregon, and Washington from the 2014-15 to 2017-18 school years, we estimate school-level racial and economic achievement gaps by grade and content area, finding the majority of the variance lies between schools (within district). We then investigate geographical variance in these estimates, with visual displays (maps) providing clear evidence of spatial clustering. Finally, we build a computational model using the physical location of the school (longitude and latitude) to predict the achievement gap. We find approximately 18-61% of the total variability accounted for by location, depending on the specific model. We further use the residualized estimates to identify schools with unexpected achievement gaps. Implications for future research and educational systems-level reform are discussed.
   
 keywords          : "Achievement Gap, Effect Size, Spatial Variance, Machine Learning"
-wordcount         : "X"
+wordcount         : "6629"
 
 bibliography      : "refs.bib"
 
@@ -105,7 +105,7 @@ Racial and economic achievement gaps are pervasive and persistent, having existe
 
 Despite the wealth of previous research investigating achievement gaps, surprisingly little has investigated between-school differences. The determinants of achievement gaps are complex, relating to both communities and educational systems [@todd07]. Given the interplay of these factors, it is logical to assume that achievement gaps would differ by school, depending on the specific community in which the school is located and the specific practices employed by school personnel. At the school district level, recent evidence from @owens18, as well as @reardon19, both suggest strong variation between districts in terms of the magnitude of achievement gaps, with both studies finding the variation to highly correlated with geography. @reardon19 found achievement gaps "ranging from nearly zero in some places to larger than 1.5 SD in others" (p. 1166), with metropolitan areas generally having higher achievement disparities.
 
-The purpose of this paper is to extend previous research by focusing specifically on school-level achievement gap variability, with a particular emphasis on geographic variance. Our analysis includes the estimation and exploration of school-level Hispanic-White, Black-White, and economically-based achievement gaps in California, Oregon, and Washington across the 2014-15 to 2017-18 school years. We estimate the proportion of achievement gap variability attributable to between-school differences, as opposed to districts, counties, and states. We further provide screenshots of, and a link to, an interactive mapping application allowing for the exploration of between-school and geographic differences in achievement gaps. Finally, we report the results a computational model built to predict school-level achievement gaps based on the physical location of the school (longitude and latitude). In what follows, we first discuss prior research on achievement gaps, including evidence of community- and school-inputs. We then discuss the specific methods and results of our study, before concluding with a discussion of the implications of our findings for practice, policy, and future research. 
+The purpose of this paper is to extend previous research by focusing specifically on school-level achievement gap variability, with a particular emphasis on geographic variance. Our analysis includes the estimation and exploration of school-level Hispanic-White, Black-White, and economically-based achievement gaps in California, Oregon, and Washington across the 2014-15 to 2017-18 school years. We estimate the proportion of achievement gap variability attributable to between-school differences, as opposed to districts, counties, and states. We further provide screenshots of, and a link to, an interactive mapping application allowing for the exploration of between-school and geographic differences in achievement gaps. Finally, we report the results of a computational model built to predict school-level achievement gaps based on the physical location of the school (longitude and latitude). In what follows, we first discuss prior research on achievement gaps, including evidence of community- and school-inputs. We then discuss the specific methods and results of our study, before concluding with a discussion of the implications of our findings for practice, policy, and future research. 
 
 ## Community-Level Inputs
 Evidence from @reardon11 and @konstantopoulos05, among others [e.g., @dills06] indicates that economically-based achievement gaps have grown over time. This trend could be attributed, in part, to the overall rise of income inequality observed in the general population over the same time period [@saez16; @saez18]. @reardon11, however, cautions that the issue is more nuanced, stating “it is not rising income inequality per se that has caused the income achievement gap; rather, a dollar of income (or factors correlated with income) appears to buy more academic achievement than it did several decades ago.” (p. 17). As mentioned previously, however, recent evidence from @hanushek19 indicates economic achievement gaps as having been largely stable over time, which complicates the attribution of rising income inequality being related to economically-based achievement gaps. Making the issue more complex, race and income are correlated, with long-standing racial gaps in income having been observed [@blau90; @hoover15]. 
@@ -353,9 +353,9 @@ The second research question addressed the extent to which school-level achievem
 
 
 ```{r cv-perf, fig.height = 8, fig.width = 6.5, fig.cap="Average root mean square error (RMSE) over five repeats of 10-fold cross-validation for k-nearest neighbor models with 1 to 50 neighbors. Models included latitude and longitude as a predictor of the 2016-17 school-level achievement gap data."}
-perf <- read_rds(here("knn-models", "perf17.rds"))
+perf17 <- read_rds(here("knn-models", "perf17.rds"))
 
-best_neigh <- perf %>%
+best_neigh <- perf17 %>%
   filter(.metric == "rmse") %>%
   group_by(model, content, gap_group) %>%
   nest() %>%
@@ -364,16 +364,16 @@ best_neigh <- perf %>%
                                        drop = TRUE])) %>%
   select(-data)
 
-perf10 <- perf %>%
+perf10 <- perf17 %>%
   filter(neighbors == 10)
 
-best <- perf %>%
+best <- perf17 %>%
   semi_join(best_neigh) %>%
   group_by(content, gap_group, model, neighbors, .metric) %>%
   summarize(mean = mean(.estimate)) %>%
   spread(.metric, mean)
 
-perf10_best <- perf %>%
+perf10_best <- perf17 %>%
    semi_join(best_neigh) %>%
    bind_rows(perf10) %>%
    group_by(content, gap_group, model, neighbors, .metric) %>%
@@ -391,7 +391,7 @@ max_abs_diff <- perf10_best %>%
   max(.)
 
 # summarize by neighbor
-perf %>%
+perf17 %>%
   filter(.metric == "rmse") %>%
   group_by(content, model, gap_group, neighbors) %>%
   summarize(rmse = mean(.estimate)) %>%
@@ -410,13 +410,13 @@ perf %>%
 
 
 ```{r perf}
-perf_10_est <- perf %>%
+perf_10_est <- perf17 %>%
   filter(neighbors == 10) %>% 
   group_by(model, content, gap_group, .metric) %>%
   summarize(mean = mean(.estimate)) %>%
   spread(.metric, mean)
 
-perf_10_var <- perf %>%
+perf_10_var <- perf17 %>%
   filter(neighbors == 10) %>% 
   group_by(model, content, gap_group, .metric) %>%
   summarize(sd = sd(.estimate)) %>%
@@ -486,21 +486,23 @@ Following our evaluation of the optimal $k$, we fit the model to the full traini
 include_graphics(here("manuscript", "app-screenshots-resid", "app-images-resid-combined.png"))
 ```
 
-The model fit described above provides an estimate of the degree to which school-level achievement gaps can be predicted by the achievement gaps of the closest 10 schools. Presumably, if the achievement gap of a given school can be predicted by the achievement gap of schools in the same geographic proximity, then at least part of what drives achievement gaps are related to larger-scale factors beyond the individual school. However, we were also interested in cases in which the model failed, with specific schools having a much different achievement gap than would be expected based on the surrounding schools. We therefore reproduced the map with the 2017-18 data, but with the points colored according to the residualized estimates from the model rather than the raw achievement gap, as displayed in Figure \@ref(fig:screenshots-resid). These residualized estimates provide a critical source of information when considering school- versus community-level features relating to achievement gaps. While there are likely both school system and community features relating to the spatial variation in achievement gaps, schools that are highly discrepant from the overall trends may be functioning in a systematically different way. Follow-up qualitative investigations in these schools and communities may help form deeper understandings of this functioning.
-
-Finally, we evaluated the extent to which the predictive accuracy of the model changed when including achievement gap estimates from prior years. Two separate models were fit, with the first including school year pooled over time (i.e., longitude and latitude remaining as the only predictors, but each school including multiple observations), and the second including a *wave* term coded as a linear function of time (i.e., 0, 1, 2, 3). Note that, for each model, the nearest neighbor in the predictor space could be the same school estimate from a different year. The data were fit to the 2014-15 to 2016-17 data and again evaluated against the 2017-18 data. Results of the repeated 10-fold cross validation indicated considerably lower $k$ values across models, ranging from XX for BLAH to XX for BLAH, suggesting at least some within-school data being used in the predictions. The model including *wave* universally had a higher RMSE and was therefor not evaluated further.
+The model fit described above provides an estimate of the degree to which school-level achievement gaps can be predicted by the achievement gaps of the closest 10 schools. Presumably, if the achievement gap of a given school can be predicted by the achievement gap of schools in the same geographic proximity, then at least part of what drives achievement gaps are related to larger-scale factors beyond the individual school. However, we were also interested in cases in which the model failed, with specific schools having a much different achievement gap than would be expected based on the surrounding schools. We therefore reproduced the map with the 2017-18 data, but with the points colored according to the residualized estimates from the model rather than the raw achievement gap, as displayed in Figure \@ref(fig:screenshots-resid). These residualized estimates provide a critical source of information when considering school- versus community-level features relating to achievement gaps. While there are likely both school system and community features relating to the spatial variation in achievement gaps, schools that are highly discrepant from the overall trends may be functioning in a systematically different way. 
 
 ```{r knn-results-tbl}
 knn_1517 <- read_csv(here("knn-models", "geo-full-test1517.csv"))
 knn_18 <- read_csv(here("knn-models", "geo-full-test1517.csv"))
 
-# temporary - remove after getting actual neighbor vals
-knn_1517 <- knn_1517 %>%
-  mutate(neighbors = round(rnorm(6, 5, 1)))
+specs_full <- read_rds(here("knn-models", "specs_full.rds"))
 
-knn_18 <- knn_18 %>%
-  mutate(neighbors = round(rnorm(6, 5, 1)))
-##
+knn_1517 <- specs_full %>%
+  filter(model == "Geography Only") %>%
+  select(-specs, - recipe) %>%
+  right_join(knn_1517)
+
+knn_18 <- specs_full %>%
+  filter(model == "Geography Only") %>%
+  select(-specs, - recipe) %>%
+  right_join(knn_18)
 
 knn_tbl <- bind_rows(train_results17, train_results18, knn_1517, knn_18,
                      .id = "Dataset") %>%
@@ -562,14 +564,17 @@ grp_all <- c(knn_18$gap_group, knn_18$gap_group)
 
 min_all <- setNames(min(rsq_all), grp_all[which.min(rsq_all)])
 max_all <- setNames(max(rsq_all), grp_all[which.max(rsq_all)])
-```
 
-Overall, the model including prior achievement gap estimates accounted for more variance than the model from a single year, and the variance accounted for by the model using the testing data from 2014-15 to 2016-17 was again very similar to the variance accounted for by the model in the 2017-18 data, as reported in the bottom half of Table 2. The models accounted for `r paste0(round(min_all, 2)*100, "%")` to `r paste0(round(max_all, 2)*100, "%")` of the total variability in between-school achievement gaps.
+
+```
+Finally, we evaluated the extent to which the predictive accuracy of the model changed when including achievement gap estimates from prior years. Two separate models were fit, with the first including school year pooled over time (i.e., longitude and latitude remaining as the only predictors, but each school including multiple observations), and the second including a *wave* term coded as a linear function of time (i.e., 0, 1, 2, 3). Note that, for each model, the nearest neighbor in the predictor space could be the same school estimate from a different year. The data were fit to the 2014-15 to 2016-17 data and again evaluated against the 2017-18 data. Results of the repeated 10-fold cross validation indicated considerably lower $k$ values across the models including only longitude and latitude, ranging from `r min(specs_full$neighbors[specs_full$model == "Geography Only"])` to `r max(specs_full$neighbors[specs_full$model == "Geography Only"])`, suggesting at least some within-school data being used in the predictions. The model that also included *wave* indicated much higher $k$ values, ranging from `r min(specs_full$neighbors[specs_full$model == "Geography + Academic Year"])` to `r max(specs_full$neighbors[specs_full$model == "Geography + Academic Year"])`. Similar to the first set of models, however, the change in the RMSE slowed considerably after a $k$ of about 10. Across all candidate $k$ values, however, the model including $wave$ universally had a higher RMSE, indicating a poorer fit to the data (i.e., the model was likely overfit to some degree) and was therefore not considered further.
+
+Overall, the model including prior achievement gap estimates accounted for more variance than the model from a single year, and the variance accounted for by the model using the testing data from 2014-15 to 2016-17 was again very similar to the variance accounted for by the model in the 2017-18 data, as reported in the bottom half of Table 2. The models accounted for `r paste0(round(min_all, 2)*100, "%")` to `r paste0(round(max_all, 2)*100, "%")` of the total variability in between-school achievement gaps. These results indicate that while the majority of the variance was accounted for by geography alone, including additional years of achievement gap data did result in better out-of-sample predictions while accounting for a marginally larger portion of the total variability in school-level achievement gaps.
 
 # Discussion
 Achievement gaps are complex, deriving from a multitude of factors. In this paper, we evaluated differences in achievement gaps between schools, with a particular focus on geographic variation. Similar to @owens18 and @reardon19, we found strong evidence of variation in achievement gaps being linked to geography. In particular, @reardon19 found district-level achievement gaps represented in metropolitan areas to be larger, on average, than those represented in other areas. The current study generally aligns with these results, as illustrated through visual representations of school-level achievement gaps across California, Oregon, and Washington. Urban communities frequently have higher rates of crime and poor health outcomes, each of which have been shown to impact achievement [@basch11a; @bowen99; @geronimus00; @milam10]. These community-level variables alone, however, would not necessarily explain disparate outcomes between student groups, unless they were found to impact one group of students more than another (i.e., they may explain differences in absolute achievement, but not necessarily achievement gaps). Rather, it is likely that schools within urban communities are more likely to include  students who have been impacted by these conditions at differing degrees, including some who have experienced little to no negative impact of these variables, and others who have experienced a high degree of impact. Poor health outcomes are correlated with neighborhood-level poverty [e.g., see @mode16], and racial/ethnic minorities are highly over-represented within these communities [@eig18]. The most likely group of students to be negatively impacted by these community-level variables are therefore students from a racial/ethnic minority and from economically disadvantaged backgrounds, which ultimately leads to higher achievement gaps.
 
-In our study, we found more between school (within-district) variation in achievement gaps than between districts (although the latter remained an important source of variation). This finding highlights the need for additional research at the school level. For example, explorations of the residualized achievement gap estimates revealed some schools that were highly discrepant from those surrounding it. Understanding why these schools differ from others in their community may help to understand systems-level practices in education that relate to achievement gap variability which, if manipulated, could begin to help close achievement gaps at scale. The compendium of factors relating to achievement gaps clearly goes beyond the direct control of school personnel. @owens18 and @reardon19, for example, both found indicators of community-level segregation to have a strong relation with achievement gaps in the area. While potentially a long-term policy and public planning goal, teachers and administrators cannot directly influence neighborhood segregation levels. However, that some schools are highly discrepant from those around them also provides promising evidence that *something* different is happening in those schools, which may relate to school practices, policies, climate, etc., all of which can be influenced by school personnel. Further, @hanushek06 did find evidence that differences in school quality related to changes in the Black-White achievement gap, providing further evidence that schools are an important factor in achievement gap variation. 
+In our study, we found more between school (within-district) variation in achievement gaps than between districts (although the latter remained an important source of variation). This finding highlights the need for additional research at the school level. For example, explorations of the residualized achievement gap estimates revealed some schools that were highly discrepant from those surrounding it. Understanding why these schools differ from others in their community may help to understand systems-level practices in education that relate to achievement gap variability which, if manipulated, could begin to help close achievement gaps at scale. The compendium of factors relating to achievement gaps clearly goes beyond the direct control of school personnel. @owens18 and @reardon19, for example, both found indicators of community-level segregation to have a strong relation with achievement gaps in the area. While potentially a long-term policy and public planning goal, teachers and administrators cannot directly influence neighborhood segregation levels. However, that some schools are highly discrepant from those around them also provides promising evidence that *something* different is happening in those schools, which may relate to school practices, policies, climate, etc., all of which can be influenced by school personnel. Follow-up qualitative investigations in these schools and communities may help form deeper understandings of the school functioning and community inputs that may relate to these systematic differences. Further, evidence from @hanushek06 did suggest that school quality influenced longitudinal trends in the Black-White achievement gap, providing further evidence that schools are an important factor in achievement gap variation. 
 
 Many [@carter13; @flores07; @milner12] have discussed reframing achievement gaps as opportunity gaps, with differential opportunities leading to differential achievement. Given the strong evidence of communities influencing achievment gaps, it is important that discussions of opportunity gaps also take into consideration differences in out-of-school opportunities for different groups of students. Unfortunately, there is also strong evidence that within-school differential opportunities are baked into the fabric of many school systems. Disproportionality in suspension and expulsion data by race/ethnicity and socioeconomic status is well documented and is perhaps as prevalent as achievement gaps themselves [e.g., see @noltemeyer10; @skiba02; @skiba11]. In the largest study on the topic to date, @morris16 found approximately 20% of the Black-White achievement gap was accounted for by disproportionality in out-of-school suspension rates. Conducting follow-up investigation with schools found in our study to be discrepant from those around them may reveal differences in school system-level opportunity variables, such as policies and practice related to suspension and expulsion, which could ultimately lead to promising principles of practice for school systems committed to reducing achievement disparities and large-scale inequities.
 
